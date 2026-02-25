@@ -1,0 +1,158 @@
+{
+  "entities": {
+    "Preset": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Preset",
+      "type": "object",
+      "description": "Represents a saved configuration of the application, including mode, filter, and control parameters.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the preset (e.g., '0', '1', '2')."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The user ID of the preset owner."
+        },
+        "mode": {
+          "type": "string",
+          "description": "The active visual mode (e.g., 'SONIC_MESH')."
+        },
+        "filter": {
+          "type": "string",
+          "description": "The active camera filter (e.g., 'REAL')."
+        },
+        "p1": {
+          "type": "number",
+          "description": "Value for parameter 1 of the active mode."
+        },
+        "p2": {
+          "type": "number",
+          "description": "Value for parameter 2 of the active mode."
+        },
+        "p3": {
+          "type": "number",
+          "description": "Value for parameter 3 of the active mode."
+        },
+        "sensitivity": {
+          "type": "number",
+          "description": "Sensitivity setting."
+        },
+        "audioGain": {
+          "type": "number",
+          "description": "Audio gain setting."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "mode",
+        "filter",
+        "p1",
+        "p2",
+        "p3",
+        "sensitivity",
+        "audioGain"
+      ]
+    },
+    "Session": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Session",
+      "description": "Represents a summary of a user's creative session, including performance metrics and an AI-generated manifesto.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The user ID of the session owner."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time when the session was concluded."
+        },
+        "modesUsed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A list of visual modes used during the session."
+        },
+        "motionAvg": {
+          "type": "number",
+          "description": "The average motion score throughout the session."
+        },
+        "audioAvg": {
+          "type": "number",
+          "description": "The average audio score throughout the session."
+        },
+        "manifesto": {
+          "type": "string",
+          "description": "An AI-generated summary or 'manifesto' of the session."
+        },
+        "videoURL": {
+          "type": "string",
+          "description": "A URL to the recorded video of the session (if available)."
+        }
+      },
+      "required": [
+        "userId",
+        "timestamp",
+        "modesUsed",
+        "motionAvg",
+        "audioAvg",
+        "manifesto"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}/presets/{presetId}",
+        "definition": {
+          "entityName": "Preset",
+          "schema": {
+            "$ref": "#/backend/entities/Preset"
+          },
+          "description": "Stores presets owned by a specific user. Path-based ownership ensures that only the user can access their presets.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "presetId",
+              "description": "The unique identifier of the preset."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/sessions/{sessionId}",
+        "definition": {
+          "entityName": "Session",
+          "schema": {
+            "$ref": "#/backend/entities/Session"
+          },
+          "description": "Stores curated summaries of user sessions. Path-based ownership ensures privacy and security.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "sessionId",
+              "description": "The unique identifier of the session."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to securely manage user data and application configurations for the Kinefonia Studio. The primary focus is on authorization independence, ensuring atomic operations and simplified security rules. This is achieved through structural segregation and denormalization. \n\nPresets and user sessions are stored under each user's document to ensure that they are only accessible to the user that created them.\n\nThis design supports secure list operations (QAPs) as each collection enforces consistent security requirements without requiring filtering based on document content."
+  }
+}
