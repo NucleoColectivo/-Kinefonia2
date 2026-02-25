@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @title Kinefonia Studio Security Rules
+     * @version 1.0.0
+     *
+     * @philosophy
+     * This ruleset enforces a strict user-ownership model. All application data,
+     * such as presets and session summaries, is owned by and exclusively accessible
+     * to the user who created it. There is no concept of public or shared data.
+     *
+     * @structure
+     * All user data is structurally segregated and nested under a user-specific
+     * path: /users/{userId}/. This design is inherently secure and performant,
+     * as it prevents any possibility of data leakage between users and simplifies
+     * queries by isolating data at the root.
+     *
+     * @decisions
+     * - Default Deny: Access is denied by default. Rules only grant permission
+     *   explicitly to the data owner.
+     * - No User Listing: It is not possible to list documents in the top-level
+     *   /users collection, protecting user privacy.
+     * - Relational Integrity: To ensure data consistency, any document created
+     *   under a user's path (e.g., /users/{userId}/presets/{presetId}) must contain
+     *   a 'userId' field that matches the {userId} from the path. This field is
+     *   enforced as immutable upon update.
+     *
+     * @prototyping
+     * These rules are in Prototyping Mode. They strictly enforce authorization
+     * (who can access what) but remain flexible on the specific shape of the data
+     * being written to allow for rapid development and iteration. Only fields
+     * critical for authorization (like 'userId') are validated.
+     */
+
+    //=========== Helper Functions ===========//
+
+    /**
+     * Checks if the user is signed in.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user's UID matches the provided userId.
+     * This is the core function for enforcing data ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks if the user is the owner of an existing document.
+     * Used for safe update and delete operations.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    // --- Write Validation Helpers --- //
+
+    /**
+     * On create, validates that the new document's internal 'userId' field
+     * correctly matches the owner's ID from the path.
+     * This establishes the ownership link within the data itself.
+     */
+    function hasCorrectUserIdOnCreate(userId) {
+      return request.resource.data.userId == userId;
+    }
+
+    /**
+     * On update, ensures that the 'userId' field cannot be changed.
+     * This prevents re-assigning ownership of a document.
+     */
+    function userIdIsImmutable() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    //=========== Data Access Rules ===========//
+
+    match /users/{userId} {
+      /**
+       * @description Disallows any direct operations on user root documents.
+       * @path /users/{userId}
+       * @allow None. The subcollections have their own rules.
+       * @deny Any user attempting to read, list, or write to the /users collection or documents within it.
+       * @principle Prevents user enumeration and protects user privacy by securing the root user document.
+       */
+      allow get: if false;
+      allow list: if false;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+
+      /**
+       * @description Secures a user's collection of presets.
+       * @path /users/{userId}/presets/{presetId}
+       * @allow A logged-in user (uid: 'user123') creating a preset at '/users/user123/presets/preset_abc'.
+       * @deny A logged-in user (uid: 'user456') attempting to read a preset at '/users/user123/presets/preset_abc'.
+       * @principle Restricts all access to the data owner based on the path.
+       */
+      match /presets/{presetId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && hasCorrectUserIdOnCreate(userId);
+        allow update: if isExistingOwner(userId) && userIdIsImmutable();
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Secures a user's collection of session summaries.
+       * @path /users/{userId}/sessions/{sessionId}
+       * @allow A logged-in user (uid: 'user123') creating a session summary at '/users/user123/sessions/session_xyz'.
+       * @deny A logged-in user (uid: 'user456') attempting to list summaries at '/users/user123/sessions'.
+       * @principle Restricts all access to the data owner based on the path.
+       */
+      match /sessions/{sessionId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && hasCorrectUserIdOnCreate(userId);
+        allow update: if isExistingOwner(userId) && userIdIsImmutable();
+        allow delete: if isExistingOwner(userId);
+      }
+    }
+  }
+}
